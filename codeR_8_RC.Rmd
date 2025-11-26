@@ -1,0 +1,512 @@
+# Tugas Besar Komstat
+
+## Load & Import Data
+
+```{r}
+install.packages(c("fitdistrplus", "gridExtra", "MASS"))
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(fitdistrplus)
+library(gridExtra)
+library(MASS)
+library(lubridate)
+```
+
+```{r}
+# Load data
+url <- "https://raw.githubusercontent.com/sains-data/TUGAS-BESAR-KOMSTAT-RC-KELOMPOK-8/refs/heads/main/PenumpangAngkutanUdara.csv"
+
+df <- read.csv(url, sep=';')
+
+# Lihat beberapa data
+head(df)
+```
+
+```{r}
+# Lihat dimensi dari data
+dim(df)
+```
+
+## Eksplorasi dan Cleaning Data
+
+```{r}
+# Cek jumlah missing value
+sum(is.na(df))
+```
+
+```{r}
+# Pastikan data dalam bentuk integer
+df$Total_Kedatangan <- as.integer(df$Total_Kedatangan)
+df$Total_Keberangktan <- as.integer(df$Total_Keberangktan)
+
+# Buat kolom Total_Kedatangan
+df$Total_Penumpang <- df$Total_Kedatangan + df$Total_Keberangktan
+```
+
+```{r}
+# Statistik Deskriptif Sederhana
+summary(df)
+```
+
+## Plot Data
+
+### Plot Tiap Fitur
+
+```{r}
+cols <- c("Total_Kedatangan", "Total_Keberangktan", "Total_Penumpang")
+
+for (col in cols) {
+  hist(df[[col]],
+       main = paste("Histogram", col),
+       xlab = col,
+       col = "steelblue",
+       border = "black",
+       breaks = 15)
+}
+```
+
+### Line Chart
+
+```{r}
+# Buat kolom tanggal
+df$Tanggal <- as.Date(paste(df$Tahun, df$Bulan, "01", sep = "-"))
+```
+
+```{r}
+# Siapkan plot kosong
+plot(df$Tanggal, df$Total_Keberangktan,
+     type = "l",
+     col = "steelblue",
+     lwd = 2,
+     xlab = "Tanggal",
+     ylab = "Jumlah Penumpang",
+     main = "Pergerakan Penumpang Angkutan Udara")
+
+# Tambahkan garis kedua
+lines(df$Tanggal, df$Total_Kedatangan,
+      col = "firebrick",
+      lwd = 2)
+
+# Tambahkan legenda
+legend("topright",
+       legend = c("Keberangkatan", "Kedatangan"),
+       col = c("steelblue", "firebrick"),
+       lwd = 2,
+       bty = "n")
+```
+
+```{r}
+# Siapkan plot kosong
+plot(df$Tanggal, df$Total_Penumpang,
+     type = "l",
+     col = '#128eb7',
+     lwd = 2,
+     xlab = "Tanggal",
+     ylab = "Jumlah Penumpang",
+     main = "Pergerakan Penumpang Angkutan Udara")
+```
+
+### Komponen Time Series
+
+```{r}
+ts_data <- ts(df$Total_Penumpang, start = c(min(df$Tahun), min(df$Bulan)), frequency = 12)
+decomp <- decompose(ts_data)
+plot(decomp)
+```
+
+### Boxplot
+
+```{r}
+ggplot(df, aes(y = Total_Penumpang)) +
+  geom_boxplot(fill = "steelblue", color = "black") +
+  labs(title = "Boxplot Total Penumpang",
+       y = "Jumlah Penumpang") +
+  theme_minimal()
+```
+
+## Simulasi Total Penumpang Angkutan Udara
+
+```{r}
+set.seed(42) # Untuk reproduksibilitas
+```
+
+```{r}
+# Histogram data asli dari atribut Total_Penumpang
+hist_asli <- ggplot(df, aes(x = Total_Penumpang)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  ggtitle("Total Penumpang (data asli)") +
+  xlab("Total Penumpang")
+
+hist_asli # Data terlihat memiliki distribusi normal
+```
+
+### Uji Asumsi Normalitas
+
+```{r}
+# Uji Shapiro-Wilk
+shapiro.test(df$Total_Penumpang)
+```
+
+Dari hasil diatas, gagal tolak Ho artinya data berdistribusi normal secara statistik
+
+```{r}
+# Plot QQ
+qqnorm(df$Total_Penumpang)
+qqline(df$Total_Penumpang)
+```
+
+Plot diatas juga menunjukkan titik banyak berada di dekat garis lurus
+
+### Tentukan Parameter Dari Data Menggunakan Normal MLE
+
+```{r}
+fit_norm <- fitdist(df$Total_Penumpang, "norm")
+mu_hat <- fit_norm$estimate[1]
+sd_hat <- fit_norm$estimate[2]
+
+print(mu_hat)
+print(sd_hat)
+```
+
+### Simulasi Dengan Metode Inverse-Transform
+
+```{r}
+set.seed(12345)
+sample_sizes <- c(100, 1000, 10000)
+simulated_data_list <- list()
+
+for (n in sample_sizes) {
+  u <- runif(n)
+  simulated_norm <- qnorm(u, mean = mu_hat, sd = sd_hat)
+  simulated_data_list[[paste0("n_", n)]] <- simulated_norm
+}
+```
+
+```{r}
+results_df <- data.frame(Sample_Size = numeric(),
+                         Simulated_Mean = numeric(),
+                         Simulated_SD = numeric(),
+                         Mean_Bias = numeric(),
+                         SD_Bias = numeric())
+
+for (n_str in names(simulated_data_list)) {
+  n <- as.numeric(gsub("n_", "", n_str))
+  sim_data <- simulated_data_list[[n_str]]
+
+  sim_mean <- mean(sim_data)
+  sim_sd <- sd(sim_data)
+
+  mean_bias <- abs(sim_mean - mu_hat)
+  sd_bias <- abs(sim_sd - sd_hat)
+
+  results_df <- rbind(results_df, data.frame(Sample_Size = n,
+                                             Simulated_Mean = sim_mean,
+                                             Simulated_SD = sim_sd,
+                                             Mean_Bias = mean_bias,
+                                             SD_Bias = sd_bias))
+}
+
+print("Comparison of simulated data statistics with estimated parameters:")
+print(results_df)
+```
+
+```{r}
+library(tidyr)
+
+results_long <- results_df %>%
+  gather(key = "Bias_Type", value = "Bias_Value", Mean_Bias, SD_Bias)
+
+ggplot(results_long, aes(x = Sample_Size, y = Bias_Value, color = Bias_Type)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(title = "Mean and Standard Deviation Bias vs. Sample Size",
+       x = "Sample Size (n)",
+       y = "Absolute Bias",
+       color = "Bias Type") +
+  scale_color_manual(values = c("Mean_Bias" = "blue", "SD_Bias" = "red"),
+                     labels = c("Mean_Bias" = "Mean Bias", "SD_Bias" = "Standard Deviation Bias")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+# Side-by-Side Comparison
+par(mfrow = c(1, 2))  # 1 baris, 2 kolom plot
+x_inv <- simulated_data_list[["n_10000"]]
+
+hist(df$Total_Penumpang, breaks = 10, main = "Data Asli", col = '#c97c00', xlab = "Nilai")
+hist(x_inv, breaks = 10, main = "Inverse-Transform", col = '#128eb7', xlab = "Nilai")
+```
+
+```{r}
+par(mfrow = c(1,1))
+hist(df$Total_Penumpang, breaks = 20, col = rgb(0,0,1,0.4), main = "Overlay Histogram Data Asli & Simulasi",
+     xlab = "Nilai", freq = FALSE)
+hist(x_inv, breaks = 20, col = rgb(1,0,0,0.4), add = TRUE, freq = FALSE)
+
+lines(density(df$Total_Penumpang), col = "blue", lwd = 2)
+lines(density(x_inv), col = "red", lwd = 2)
+
+legend("topleft", legend = c("Distribusi Asli", "Inverse-Transform"),
+       fill = c(rgb(0,0,1,0.4), rgb(1,0,0,0.4)))
+```
+
+```{r}
+# Uji kesamaan distribusi menggunakan Kolmogorov-Smirnov
+ks.test(df$Total_Penumpang, x_inv)
+```
+
+### Simulasi Dengan Metode Acceptance-Rejection
+
+```{r}
+set.seed(12345)
+# Acceptance-Rejection menggunakan Cauchy proposal
+normal_ar <- function(n) {
+  samples <- numeric(n)
+  count <- 0
+
+  c <- 1.5  # konstanta pembesar
+
+  while (count < n) {
+    x_proposal <- rcauchy(1)          # kandidat dari proposal Cauchy
+    u <- runif(1)
+
+    f_x <- dnorm(x_proposal)          # pdf normal target
+    g_x <- 1/(pi * (1 + x_proposal^2)) # pdf cauchy proposal
+
+    # acceptance condition
+    if (u <= f_x / (c * g_x)) {
+      count <- count + 1
+      samples[count] <- x_proposal
+    }
+  }
+  return(samples)
+}
+
+# contoh penggunaan
+N <- c(100, 1000, 10000)
+x_ars <- list()
+
+for (n in N) {
+    x_ars[[paste0("n_", n)]] <- mu_hat + sd_hat * normal_ar(n)
+}
+```
+
+```{r}
+results_df2 <- data.frame(Sample_Size = numeric(),
+                         Simulated_Mean = numeric(),
+                         Simulated_SD = numeric(),
+                         Mean_Bias = numeric(),
+                         SD_Bias = numeric())
+
+for (n_str in names(x_ars)) {
+  n <- as.numeric(gsub("n_", "", n_str))
+  sim_data <- x_ars[[n_str]]
+
+  sim_mean <- mean(sim_data)
+  sim_sd <- sd(sim_data)
+
+  mean_bias <- abs(sim_mean - mu_hat)
+  sd_bias <- abs(sim_sd - sd_hat)
+
+  results_df2 <- rbind(results_df2, data.frame(Sample_Size = n,
+                                             Simulated_Mean = sim_mean,
+                                             Simulated_SD = sim_sd,
+                                             Mean_Bias = mean_bias,
+                                             SD_Bias = sd_bias))
+}
+
+print("Comparison of simulated data statistics with estimated parameters:")
+results_df2
+```
+
+```{r}
+results_long <- results_df2 %>%
+  gather(key = "Bias_Type", value = "Bias_Value", Mean_Bias, SD_Bias)
+
+ggplot(results_long, aes(x = Sample_Size, y = Bias_Value, color = Bias_Type)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(title = "Mean and Standard Deviation Bias vs. Sample Size",
+       x = "Sample Size (n)",
+       y = "Absolute Bias",
+       color = "Bias Type") +
+  scale_color_manual(values = c("Mean_Bias" = "blue", "SD_Bias" = "red"),
+                     labels = c("Mean_Bias" = "Mean Bias", "SD_Bias" = "Standard Deviation Bias")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+# Side-by-Side Comparison
+par(mfrow = c(1, 2))  # 1 baris, 2 kolom plot
+x_ar <- x_ars[["n_10000"]]
+
+hist(df$Total_Penumpang, breaks = 20, main = "Data Asli", col = '#c97c00', xlab = "Nilai")
+
+hist(x_ar, breaks = 20, main = "Acceptance-Rejection", col = '#128eb7', xlab = "Nilai")
+```
+
+```{r}
+par(mfrow = c(1,1))
+hist(df$Total_Penumpang, breaks = 20, col = rgb(0,0,1,0.4), main = "Overlay Histogram Data Asli & Acceptance-Rejection",
+     xlab = "Nilai", freq = FALSE)
+hist(x_ar, breaks = 20, col = rgb(1,0,0,0.4), add = TRUE, freq = FALSE)
+
+lines(density(df$Total_Penumpang), col = "blue", lwd = 2)
+lines(density(x_ar), col = "red", lwd = 2)
+
+legend("topleft", legend = c("Distribusi Asli", "Acceptance-Rejection"),
+       fill = c(rgb(0,0,1,0.4), rgb(1,0,0,0.4)))
+```
+
+```{r}
+# Uji kesamaan distribusi menggunakan Kolmogorov-Smirnov
+ks.test(df$Total_Penumpang, x_ar)
+```
+
+### Simulasi Dengan Menggunakan Transformation Method (Box-Muller)
+
+```{r}
+set.seed(12345)
+# Box-Muller Transform
+normal_box_muller <- function(n, mean = 0, sd = 1) {
+  # jumlah pasangan (karena tiap iterasi menghasilkan 2 angka)
+  m <- ceiling(n / 2)
+
+  U1 <- runif(m)
+  U2 <- runif(m)
+
+  R <- sqrt(-2 * log(U1))
+  theta <- 2 * pi * U2
+
+  Z1 <- R * cos(theta)
+  Z2 <- R * sin(theta)
+
+  Z <- c(Z1, Z2)
+  Z <- Z[1:n]   # ambil sebanyak n saja
+
+  return(mean + sd * Z)
+}
+
+x_boxs <- list()
+for (n in N) {
+    x_boxs[[paste0("n_", n)]] <- normal_box_muller(n, mean = mu_hat, sd = sd_hat)
+}
+```
+
+```{r}
+results_df3 <- data.frame(Sample_Size = numeric(),
+                         Simulated_Mean = numeric(),
+                         Simulated_SD = numeric(),
+                         Mean_Bias = numeric(),
+                         SD_Bias = numeric())
+
+for (n_str in names(x_boxs)) {
+  n <- as.numeric(gsub("n_", "", n_str))
+  sim_data <- x_boxs[[n_str]]
+
+  sim_mean <- mean(sim_data)
+  sim_sd <- sd(sim_data)
+
+  mean_bias <- abs(sim_mean - mu_hat)
+  sd_bias <- abs(sim_sd - sd_hat)
+
+  results_df3 <- rbind(results_df3, data.frame(Sample_Size = n,
+                                             Simulated_Mean = sim_mean,
+                                             Simulated_SD = sim_sd,
+                                             Mean_Bias = mean_bias,
+                                             SD_Bias = sd_bias))
+}
+
+print("Comparison of simulated data statistics with estimated parameters:")
+results_df3
+```
+
+```{r}
+results_long <- results_df3 %>%
+  gather(key = "Bias_Type", value = "Bias_Value", Mean_Bias, SD_Bias)
+
+ggplot(results_long, aes(x = Sample_Size, y = Bias_Value, color = Bias_Type)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(title = "Mean and Standard Deviation Bias vs. Sample Size",
+       x = "Sample Size (n)",
+       y = "Absolute Bias",
+       color = "Bias Type") +
+  scale_color_manual(values = c("Mean_Bias" = "blue", "SD_Bias" = "red"),
+                     labels = c("Mean_Bias" = "Mean Bias", "SD_Bias" = "Standard Deviation Bias")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+# Side-by-Side Comparison
+par(mfrow = c(1, 2))  # 1 baris, 2 kolom plot
+x_box <- x_boxs[["n_10000"]]
+
+hist(df$Total_Penumpang, breaks = 20, main = "Data Asli", col = '#c97c00', xlab = "Nilai")
+hist(x_ar, breaks = 20, main = "Transformation Method", col = '#128eb7', xlab = "Nilai")
+```
+
+```{r}
+par(mfrow = c(1,1))
+hist(df$Total_Penumpang, breaks = 20, col = rgb(0,0,1,0.4), main = "Overlay Histogram Data Asli & Transformation Method",
+     xlab = "Nilai", freq = FALSE)
+hist(x_box, breaks = 20, col = rgb(1,0,0,0.4), add = TRUE, freq = FALSE)
+
+lines(density(df$Total_Penumpang), col = "blue", lwd = 2)
+lines(density(x_box), col = "red", lwd = 2)
+
+legend("topleft", legend = c("Distribusi Asli", "Transformation Method"),
+       fill = c(rgb(0,0,1,0.4), rgb(1,0,0,0.4)))
+```
+
+```{r}
+# Uji kesamaan distribusi menggunakan Kolmogorov-Smirnov
+ks.test(df$Total_Penumpang, x_box)
+```
+
+## Perbandingan Hasil Ketiga Metode
+
+```{r}
+# Ambil data untuk n=10000 dari masing-masing hasil simulasi
+inv_transform_bias <- results_df[results_df$Sample_Size == 10000, c("Mean_Bias", "SD_Bias")]
+acceptance_rejection_bias <- results_df2[results_df2$Sample_Size == 10000, c("Mean_Bias", "SD_Bias")]
+transformation_method_bias <- results_df3[results_df3$Sample_Size == 10000, c("Mean_Bias", "SD_Bias")]
+
+# Tambahkan kolom metode simulasi
+inv_transform_bias$Method <- "Inverse-Transform"
+acceptance_rejection_bias$Method <- "Acceptance-Rejection"
+transformation_method_bias$Method <- "Transformation Method"
+
+# Gabungkan semua data bias
+combined_bias_df <- rbind(inv_transform_bias, acceptance_rejection_bias, transformation_method_bias)
+
+# Ubah ke format panjang untuk ggplot
+combined_bias_long <- combined_bias_df %>%
+  pivot_longer(cols = c("Mean_Bias", "SD_Bias"), names_to = "Bias_Type", values_to = "Bias_Value")
+
+# Buat bar chart perbandingan
+ggplot(combined_bias_long, aes(x = Method, y = Bias_Value, fill = Bias_Type)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  labs(title = "Comparison of Mean and SD Bias by Simulation Method (n=10000)",
+       x = "Simulation Method",
+       y = "Absolute Bias Value",
+       fill = "Bias Type") +
+  scale_fill_manual(values = c("Mean_Bias" = '#c97c00', "SD_Bias" = '#128eb7'),
+                    labels = c("Mean_Bias" = "Mean Bias", "SD_Bias" = "Standard Deviation Bias")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+head(df)
+```
+
+```{r}
+tail(df)
+```
