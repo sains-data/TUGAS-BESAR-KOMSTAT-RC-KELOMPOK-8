@@ -21,6 +21,8 @@ Kami mengimplementasikan dan membandingkan tiga algoritma Pembangkit Bilangan Ac
 
 ## 📂 Dataset
 Data yang digunakan adalah data sekunder yang diperoleh dari **Badan Pusat Statistik (BPS) Provinsi Sumatera Selatan**.
+
+* **Sumber Data:** [Penumpang Angkutan Udara yang Datang dan Berangkat (BPS Sumsel)](https://sumsel.bps.go.id/id/statistics-table/2/ODI0IzI=/penumpang-angkutan-udara-yang-datang-dan-berangkat.html)
 * **Periode:** Januari 2015 – 2025 (Data Bulanan).
 * **Variabel:**
     * $X_1, X_2$: Tahun & Bulan
@@ -68,3 +70,13 @@ Berdasarkan simulasi dengan $N=10.000$ sampel:
 * **Bahasa:** R (versi 4.4.5)
 * **IDE:** RStudio
 * **Pustaka (Libraries):** `ggplot2`, `forecast`, `fitdistrplus`, `stats`
+
+---
+
+## 👥 Penulis (Kelompok 8)
+* **Giofani Aristyo** (123450065)
+* **Ahmad Rizky** (123450050)
+* **Romauli Oktavia Silaban** (123450014)
+* **Tesalonika Hutajulu** (123450033)
+
+Institut Teknologi Sumatera (ITERA) - 2025.
