@@ -65,6 +65,6 @@ Berdasarkan simulasi dengan $N=10.000$ sampel:
 ---
 
 ## 💻 Teknologi yang Digunakan
-* **Bahasa:** R (versi 4.x)
+* **Bahasa:** R (versi 4.4.5)
 * **IDE:** RStudio
 * **Pustaka (Libraries):** `ggplot2`, `forecast`, `fitdistrplus`, `stats`
